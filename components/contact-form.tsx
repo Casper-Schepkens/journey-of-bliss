@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
-import { submitEnquiry, type EnquiryState } from "@/app/enquiry";
+import { useState, type FormEvent } from "react";
+import { site, tourLinks } from "@/lib/site";
 
-const idleEnquiry: EnquiryState = { status: "idle", message: "" };
+const ENDPOINT = "https://formsubmit.co/ajax/info@journeyofbliss.com";
+
+type Status = "idle" | "sending" | "success" | "invalid" | "error";
 
 export function ContactForm({
   tone = "light",
@@ -14,8 +16,68 @@ export function ContactForm({
   heading?: string;
   id?: string;
 }) {
-  const [state, action, pending] = useActionState(submitEnquiry, idleEnquiry);
   const dark = tone === "dark";
+  const [status, setStatus] = useState<Status>("idle");
+  const [error, setError] = useState("");
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const honey = String(data.get("_honey") ?? "").trim();
+    if (honey) {
+      setStatus("success");
+      setError("");
+      return;
+    }
+
+    const name = String(data.get("name") ?? "").trim();
+    const email = String(data.get("email") ?? "").trim();
+    const phone = String(data.get("phone") ?? "").trim();
+    const message = String(data.get("message") ?? "").trim();
+
+    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || phone.length < 8 || message.length < 5) {
+      setStatus("invalid");
+      setError("Please add your name, a valid email, a mobile number, and a short message.");
+      return;
+    }
+
+    setStatus("sending");
+    setError("");
+
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          tour: String(data.get("tour") ?? "").trim(),
+          "travel dates": String(data.get("travel dates") ?? "").trim(),
+          "group size": String(data.get("group size") ?? "").trim(),
+          message,
+          _subject: "New enquiry – journeyofbliss.com",
+          _template: "table",
+          _captcha: "false",
+          _honey: "",
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as { success?: string | boolean; message?: string } | null;
+      const accepted = body?.success === true || body?.success === "true";
+      if (!response.ok || !accepted) {
+        throw new Error(body?.message || "FormSubmit did not accept the enquiry.");
+      }
+      form.reset();
+      setStatus("success");
+    } catch {
+      setStatus("error");
+      setError("We could not send your enquiry by email. Please try again, or message us on WhatsApp.");
+    }
+  }
 
   return (
     <div className={dark ? "contact-panel rounded-md p-6 text-white shadow-lg md:p-7" : ""}>
@@ -26,66 +88,82 @@ export function ContactForm({
       ) : null}
       {dark ? <span className="mt-3 mb-5 block h-[4px] w-12 bg-white/80" /> : null}
 
-      <form id={id} action={action} className={heading ? "mt-4 space-y-3" : "space-y-3"}>
-        <div className="hidden" aria-hidden="true">
-          <label htmlFor={`${id}-company`}>Company</label>
-          <input id={`${id}-company`} name="company" tabIndex={-1} autoComplete="off" />
-        </div>
-        <Field id={`${id}-name`} name="name" label="Your name" autoComplete="name" dark={dark} required />
-        <Field id={`${id}-email`} name="email" type="email" label="Email" autoComplete="email" dark={dark} required />
-        <Field id={`${id}-phone`} name="phone" type="tel" label="Mobile No." autoComplete="tel" dark={dark} required />
-        <div>
-          <label htmlFor={`${id}-message`} className="sr-only">
-            Message
-          </label>
-          <textarea
-            id={`${id}-message`}
-            name="message"
-            required
-            minLength={5}
-            maxLength={2000}
-            rows={5}
-            placeholder="Message"
-            className={inputClass(dark)}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex w-full items-center justify-center gap-2 bg-send px-4 py-3 text-sm font-bold tracking-wider text-white uppercase hover:bg-[#002e73] disabled:opacity-70"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
-            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
-          </svg>
-          {pending ? "Sending" : "Send"}
-        </button>
-      </form>
+      {status === "success" ? (
+        <p className="mt-4 rounded-sm bg-white px-4 py-4 text-[15px] leading-relaxed text-ink" role="status">
+          Thank you. Your enquiry has been sent to Journey of Bliss. We will reply by email or phone.
+        </p>
+      ) : (
+        <form id={id} onSubmit={onSubmit} className={heading ? "mt-4 space-y-3" : "space-y-3"} noValidate>
+          <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
+            <label htmlFor={`${id}-honey`}>Leave this field empty</label>
+            <input id={`${id}-honey`} name="_honey" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+          </div>
+          <Field id={`${id}-name`} name="name" label="Your name" autoComplete="name" dark={dark} required />
+          <Field id={`${id}-email`} name="email" type="email" label="Email" autoComplete="email" dark={dark} required />
+          <Field id={`${id}-phone`} name="phone" type="tel" label="Mobile No." autoComplete="tel" dark={dark} required />
+          <div>
+            <label htmlFor={`${id}-tour`} className="sr-only">
+              Tour
+            </label>
+            <select id={`${id}-tour`} name="tour" defaultValue="" className={inputClass(dark)}>
+              <option value="">Tour (optional)</option>
+              {tourLinks.map((tour) => (
+                <option key={tour.slug} value={tour.label}>
+                  {tour.label}
+                </option>
+              ))}
+              <option value="Not sure yet">Not sure yet</option>
+            </select>
+          </div>
+          <Field id={`${id}-dates`} name="travel dates" label="Travel dates" autoComplete="off" dark={dark} />
+          <Field id={`${id}-group`} name="group size" label="Group size" autoComplete="off" dark={dark} />
+          <div>
+            <label htmlFor={`${id}-message`} className="sr-only">
+              Message
+            </label>
+            <textarea
+              id={`${id}-message`}
+              name="message"
+              required
+              minLength={5}
+              maxLength={2000}
+              rows={5}
+              placeholder="Message"
+              className={inputClass(dark)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={status === "sending"}
+            className="inline-flex w-full items-center justify-center gap-2 bg-send px-4 py-3 text-sm font-bold tracking-wider text-white uppercase hover:bg-[#002e73] disabled:opacity-70"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
+              <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+            </svg>
+            {status === "sending" ? "Sending" : "Send"}
+          </button>
+        </form>
+      )}
 
       <p className={`mt-3 text-sm ${dark ? "text-white/80" : "text-muted"}`}>
-        We reply on WhatsApp and by phone. Email delivery is not connected yet.
+        We reply by email, WhatsApp and phone.
       </p>
 
-      <div aria-live="polite" className="mt-3">
-        {state.message ? (
-          <p className={state.status === "error" ? "text-sm text-red-200" : "text-sm"} role="status">
-            {state.status === "error" && !dark ? (
-              <span className="text-red-700">{state.message}</span>
-            ) : (
-              state.message
-            )}
-          </p>
-        ) : null}
-        {state.whatsappUrl ? (
-          <a
-            href={state.whatsappUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex bg-[#25D366] px-4 py-2 text-sm font-bold text-white hover:bg-[#1ebe5d]"
-          >
-            Send this on WhatsApp
-          </a>
-        ) : null}
-      </div>
+      {status === "invalid" || status === "error" ? (
+        <div aria-live="polite" className="mt-3 rounded-sm bg-white px-4 py-3 text-sm text-ink" role="alert">
+          <p>{error}</p>
+          {status === "error" ? (
+            <a
+              href={site.whatsapp}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex bg-[#25D366] px-4 py-2 text-sm font-bold text-white hover:bg-[#1ebe5d]"
+            >
+              Message us on WhatsApp
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
