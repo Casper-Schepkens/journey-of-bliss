@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { site, tourLinks } from "@/lib/site";
 
-const ENDPOINT = "https://formsubmit.co/ajax/info@journeyofbliss.com";
+const ENDPOINT = "https://api.web3forms.com/submit";
+const ACCESS_KEY =
+  process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || "e524ba78-8423-454c-b16f-7ca97da39ec3";
 
 type Status = "idle" | "sending" | "success" | "invalid" | "error";
 
@@ -24,8 +26,8 @@ export function ContactForm({
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const honey = String(data.get("_honey") ?? "").trim();
-    if (honey) {
+    const botcheck = String(data.get("botcheck") ?? "").trim();
+    if (botcheck) {
       setStatus("success");
       setError("");
       return;
@@ -53,6 +55,11 @@ export function ContactForm({
           Accept: "application/json",
         },
         body: JSON.stringify({
+          access_key: ACCESS_KEY,
+          subject: "New enquiry – journeyofbliss.com",
+          from_name: "Journey of Bliss",
+          replyto: email,
+          botcheck: false,
           name,
           email,
           phone,
@@ -60,16 +67,11 @@ export function ContactForm({
           "travel dates": String(data.get("travel dates") ?? "").trim(),
           "group size": String(data.get("group size") ?? "").trim(),
           message,
-          _subject: "New enquiry – journeyofbliss.com",
-          _template: "table",
-          _captcha: "false",
-          _honey: "",
         }),
       });
-      const body = (await response.json().catch(() => null)) as { success?: string | boolean; message?: string } | null;
-      const accepted = body?.success === true || body?.success === "true";
-      if (!response.ok || !accepted) {
-        throw new Error(body?.message || "FormSubmit did not accept the enquiry.");
+      const body = (await response.json().catch(() => null)) as { success?: boolean; message?: string } | null;
+      if (!response.ok || body?.success !== true) {
+        throw new Error(body?.message || "Web3Forms did not accept the enquiry.");
       }
       form.reset();
       setStatus("success");
@@ -95,8 +97,8 @@ export function ContactForm({
       ) : (
         <form id={id} onSubmit={onSubmit} className={heading ? "mt-4 space-y-3" : "space-y-3"} noValidate>
           <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
-            <label htmlFor={`${id}-honey`}>Leave this field empty</label>
-            <input id={`${id}-honey`} name="_honey" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+            <label htmlFor={`${id}-botcheck`}>Leave this field empty</label>
+            <input id={`${id}-botcheck`} name="botcheck" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
           </div>
           <Field id={`${id}-name`} name="name" label="Your name" autoComplete="name" dark={dark} required />
           <Field id={`${id}-email`} name="email" type="email" label="Email" autoComplete="email" dark={dark} required />

@@ -20,4 +20,4 @@ npm run dev
 npm run build
 ```
 
-Photographs in `public/images` are from Pexels (free commercial use). The logo and icons are the existing brand files. The enquiry form sends to info@journeyofbliss.com through FormSubmit. The first real submission has to be confirmed from that inbox before later messages are delivered.
+Photographs in `public/images` are from Pexels (free commercial use). The logo and icons are the existing brand files. The enquiry form sends to info@journeyofbliss.com through Web3Forms.
